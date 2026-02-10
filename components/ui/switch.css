@@ -1,0 +1,29 @@
+/* Estilos adicionales para el switch */
+.switch-slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background-color: #374151;
+  border-radius: 20px;
+  transition: background-color 0.2s;
+}
+
+.switch-slider.active {
+  background-color: #2563eb;
+}
+
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.switch-slider.active::before {
+  transform: translateX(16px);
+}

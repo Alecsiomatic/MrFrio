@@ -1,0 +1,52 @@
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { jwtVerify } from 'jose'
+
+import { getJwtSecretKey } from '@/lib/jwt'
+
+const SESSION_COOKIE = 'session'
+const PUBLIC_FILE = /\.(?:png|jpg|jpeg|svg|gif|ico|webp|css|js|txt|map)$/
+
+async function isAuthenticated(req: NextRequest) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  if (!token) return false
+  try {
+    await jwtVerify(token, getJwtSecretKey())
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname, search } = req.nextUrl
+
+  // Excluir rutas y archivos públicos sin usar matcher complejo
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname === '/favicon.ico' ||
+    PUBLIC_FILE.test(pathname)
+  ) {
+    return NextResponse.next()
+  }
+
+  // Permitir públicas
+  const isPublic = pathname === '/' || pathname.startsWith('/login')
+  if (isPublic) {
+    if (pathname.startsWith('/login') && (await isAuthenticated(req))) {
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Proteger el resto
+  if (!(await isAuthenticated(req))) {
+    const next = encodeURIComponent(pathname + (search || ''))
+    return NextResponse.redirect(new URL(`/login?next=${next}`, req.url))
+  }
+
+  return NextResponse.next()
+}
+
+
