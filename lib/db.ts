@@ -2,7 +2,7 @@ import { createPool } from "mysql2/promise"
 
 let pool: any = null
 
-function getPool() {
+export function getPool() {
   if (!pool) {
     if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
       throw new Error("Database configuration variables are not set")
@@ -108,7 +108,7 @@ export async function getProductos() {
 }
 
 export async function getRutas() {
-  const rows = await query("SELECT id, nombre FROM rutas WHERE activo = 1")
+  const rows = await query("SELECT id, nombre, COALESCE(modo_entrenamiento, 0) as modo_entrenamiento FROM rutas WHERE activo = 1")
   return rows
 }
 

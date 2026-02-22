@@ -30,7 +30,14 @@ import {
 } from "@/lib/utils-client"
 
 /* ---------------------- tipos auxiliares -------------------- */
-type Ruta = { id: string; nombre: string }
+type Ruta = { id: string; nombre: string; modo_entrenamiento?: number }
+
+type ClienteBusqueda = {
+  id: string
+  local: string
+  direccion: string
+  telefono?: string
+}
 
 type Cliente = {
   id: string
@@ -102,6 +109,12 @@ export function SeguimientoContent() {
   /* --------------- drag & drop --------------------------- */
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [isReordenando, setIsReordenando] = useState(false)
+
+  /* --------------- modo entrenamiento --------------------- */
+  const [busquedaEntrenamiento, setBusquedaEntrenamiento] = useState("")
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<ClienteBusqueda[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [asignandoCliente, setAsignandoCliente] = useState<string | null>(null)
 
   /* --------------- ticket de venta ------------------------- */
   const [modalTicketAbierto, setModalTicketAbierto] = useState(false)
@@ -509,6 +522,82 @@ export function SeguimientoContent() {
     return "border-l border-gray-700/60"
   }
 
+  /* ---------------- modo entrenamiento helpers ---------------- */
+  const rutaActual = rutas.find(r => r.id === selectedRuta)
+  const modoEntrenamiento = rutaActual?.modo_entrenamiento === 1
+
+  const buscarClientesDisponibles = async (texto: string) => {
+    if (texto.length < 2 || !selectedRuta) {
+      setResultadosBusqueda([])
+      return
+    }
+    setIsSearching(true)
+    try {
+      const res = await fetch(`/api/clientes/buscar-disponibles?q=${encodeURIComponent(texto)}&rutaId=${selectedRuta}`)
+      if (res.ok) {
+        const data = await res.json()
+        setResultadosBusqueda(data)
+      }
+    } catch (e) {
+      console.error("Error buscando clientes:", e)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const asignarYEntregarCliente = async (cliente: ClienteBusqueda) => {
+    if (!selectedRuta) return
+    setAsignandoCliente(cliente.id)
+    try {
+      // 1. Asignar cliente a la ruta + día actual
+      const resAsignar = await fetch("/api/clientes/asignar-ruta-dia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clienteId: cliente.id, rutaId: selectedRuta })
+      })
+      if (!resAsignar.ok) throw new Error("Error al asignar cliente")
+
+      // 2. Recargar lista de clientes
+      const resClientes = await fetch(`/api/clientes/ruta/${selectedRuta}`)
+      if (resClientes.ok) {
+        const data = await resClientes.json()
+        setClientes(data)
+      }
+
+      // 3. Limpiar búsqueda
+      setBusquedaEntrenamiento("")
+      setResultadosBusqueda([])
+
+      // 4. Abrir modal de entrega para ese cliente
+      const clienteCompleto: Cliente = {
+        id: cliente.id,
+        local: cliente.local,
+        direccion: cliente.direccion
+      }
+      setClienteSeleccionado(clienteCompleto)
+      setModalEntregaAbierto(true)
+
+      showToast(`${cliente.local} asignado a esta ruta`, "success")
+    } catch (e) {
+      console.error("Error al asignar cliente:", e)
+      showToast("Error al asignar cliente", "error")
+    } finally {
+      setAsignandoCliente(null)
+    }
+  }
+
+  // Debounce para búsqueda
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (modoEntrenamiento && busquedaEntrenamiento.length >= 2) {
+        buscarClientesDisponibles(busquedaEntrenamiento)
+      } else {
+        setResultadosBusqueda([])
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [busquedaEntrenamiento, modoEntrenamiento, selectedRuta])
+
   /* ---------------- render ---------------- */
   if (isLoadingRutas) {
     return (
@@ -541,6 +630,63 @@ export function SeguimientoContent() {
       {/* clientes */}
       {selectedRuta && (
         <div className="mt-8 overflow-hidden rounded-lg border border-gray-700/50">
+          {/* Buscador modo entrenamiento */}
+          {modoEntrenamiento && (
+            <div className="bg-amber-900/30 border-b border-amber-600/50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="bg-amber-600 text-white text-xs px-2 py-1 rounded font-medium">
+                  🎓 Modo Entrenamiento
+                </span>
+                <span className="text-amber-200 text-sm">
+                  Busca y selecciona al cliente que vas a visitar
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="🔍 Buscar cliente por nombre o dirección..."
+                  value={busquedaEntrenamiento}
+                  onChange={(e) => setBusquedaEntrenamiento(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-3 h-5 w-5 animate-spin text-amber-500" />
+                )}
+              </div>
+              {resultadosBusqueda.length > 0 && (
+                <div className="mt-2 bg-gray-800 rounded-lg border border-gray-600 max-h-60 overflow-y-auto">
+                  {resultadosBusqueda.map((cliente) => (
+                    <button
+                      key={cliente.id}
+                      onClick={() => asignarYEntregarCliente(cliente)}
+                      disabled={asignandoCliente === cliente.id}
+                      className="w-full text-left p-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0 transition-colors disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-white">{cliente.local}</div>
+                          <div className="text-sm text-gray-400">{cliente.direccion}</div>
+                        </div>
+                        {asignandoCliente === cliente.id ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-amber-500" />
+                        ) : (
+                          <span className="text-amber-500 text-sm font-medium">
+                            Seleccionar →
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {busquedaEntrenamiento.length >= 2 && !isSearching && resultadosBusqueda.length === 0 && (
+                <div className="mt-2 p-3 bg-gray-800/50 rounded-lg text-gray-400 text-sm">
+                  No se encontraron clientes. Si es nuevo, anótalo en tu hoja.
+                </div>
+              )}
+            </div>
+          )}
+
           {isLoadingClientes || isLoadingEstado ? (
             <div className="flex items-center justify-center bg-gray-900/50 py-12">
               <Loader2 className="mr-3 h-6 w-6 animate-spin text-gray-300" />
