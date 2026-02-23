@@ -568,16 +568,7 @@ export function SeguimientoContent() {
       setBusquedaEntrenamiento("")
       setResultadosBusqueda([])
 
-      // 4. Abrir modal de entrega para ese cliente
-      const clienteCompleto: Cliente = {
-        id: cliente.id,
-        local: cliente.local,
-        direccion: cliente.direccion
-      }
-      setClienteSeleccionado(clienteCompleto)
-      setModalEntregaAbierto(true)
-
-      showToast(`${cliente.local} asignado a esta ruta`, "success")
+      showToast(`${cliente.local} agregado a la lista`, "success")
     } catch (e) {
       console.error("Error al asignar cliente:", e)
       showToast("Error al asignar cliente", "error")
