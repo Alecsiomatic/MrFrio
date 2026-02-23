@@ -14,6 +14,7 @@ import {
   X,
   AlertCircle,
   Pencil,
+  Trash2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "./toast-notification"
@@ -577,6 +578,32 @@ export function SeguimientoContent() {
     }
   }
 
+  // Quitar cliente de la ruta (solo día actual, modo entrenamiento)
+  const quitarClienteDeRuta = async (cliente: Cliente) => {
+    if (!selectedRuta) return
+    try {
+      const res = await fetch("/api/clientes/quitar-ruta-dia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clienteId: cliente.id, rutaId: selectedRuta })
+      })
+      if (!res.ok) throw new Error("Error al quitar cliente")
+
+      // Recargar lista de clientes
+      const resClientes = await fetch(`/api/clientes/ruta/${selectedRuta}`)
+      if (resClientes.ok) {
+        const data = await resClientes.json()
+        setClientes(data)
+      }
+
+      setMenuAbierto(null)
+      showToast(`${cliente.local} quitado de la ruta`, "success")
+    } catch (e) {
+      console.error("Error al quitar cliente:", e)
+      showToast("Error al quitar cliente", "error")
+    }
+  }
+
   // Debounce para búsqueda
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -836,11 +863,23 @@ export function SeguimientoContent() {
                                     setModalCancelarAbierto(true)
                                     setMenuAbierto(null)
                                   }}
-                                  className="flex w-full items-center gap-2 rounded-b-md px-4 py-2 text-left text-sm text-white hover:bg-gray-700"
+                                  className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-white hover:bg-gray-700 ${!modoEntrenamiento ? 'rounded-b-md' : ''}`}
                                 >
                                   <X className="h-4 w-4 text-gray-300" />
                                   Cancelar Pedido
                                 </button>
+                                {modoEntrenamiento && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      quitarClienteDeRuta(c)
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-b-md px-4 py-2 text-left text-sm text-amber-300 hover:bg-red-900/50"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-amber-400" />
+                                    Quitar de la ruta
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
